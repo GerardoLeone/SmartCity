@@ -10,9 +10,14 @@ import config
 def get_dataset(train_ratio=0.8):
     # Trasformazioni da applicare alle immagini
     transform = transforms.Compose([
-        transforms.Resize((128, 128)),  # Cambia la dimensione a 128x128
-        transforms.ToTensor(),  # Converte l'immagine in tensore
-        transforms.Normalize((0.5,), (0.5,))  # Normalizza i valori dei pixel
+        transforms.Resize((128, 128)),
+        transforms.RandomRotation(30),  # Aumenta la rotazione casuale fino a 30 gradi
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomVerticalFlip(),  # Aggiungi flip verticale casuale
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),  # Aggiungi variazioni di colore
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)),
+        transforms.Lambda(lambda x: x + 0.1 * torch.randn_like(x))
     ])
 
     # Carica il dataset
@@ -36,13 +41,21 @@ def get_dataset(train_ratio=0.8):
     return train_dataset, test_dataset, user_group
 
 
-def average_weights(w):
+def average_weights(w, sample_counts):
     """
-    Returns the average of the weights.
+    Averages the weights using sample counts as weights.
+    Args:
+      w: A list of state_dicts from different models.
+      sample_counts: A list of integers representing the number of samples for each client.
+    Returns:
+      The averaged state_dict.
     """
-    w_avg = copy.deepcopy(w[0])
-    for key in w_avg.keys():
-        for i in range(1, len(w)):
-            w_avg[key] += w[i][key]
-        w_avg[key] = torch.div(w_avg[key], len(w))
-    return w_avg
+    total_samples = sum(sample_counts)
+    averaged_weights = copy.deepcopy(w[0])
+    for key in averaged_weights.keys():
+        for i in range(len(w)):
+            if i == 0:
+                averaged_weights[key] = w[i][key] * (sample_counts[i] / total_samples)
+            else:
+                averaged_weights[key] += w[i][key] * (sample_counts[i] / total_samples)
+    return averaged_weights

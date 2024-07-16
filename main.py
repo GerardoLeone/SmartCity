@@ -1,3 +1,4 @@
+# main.py
 import copy
 import os
 import time
@@ -11,7 +12,6 @@ import config
 from update import LocalUpdate, test_inference
 from models import CNNGarbage
 from utils import get_dataset, average_weights
-
 
 if __name__ == '__main__':
     start_time = time.time()
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     # copy weights
     global_weights = global_model.state_dict()
 
-    #Training
+    # Training
     train_loss, train_accuracy = [], []
     val_acc_list, net_list = [], []
     cv_loss, cv_acc = [], []
@@ -56,32 +56,46 @@ if __name__ == '__main__':
     # 10 epoch
     for epoch in tqdm(range(config.EPOCHS)):
         local_weights, local_losses = [], []
+        sample_counts = []
         print(f'\n | Global Training Round : {epoch + 1} |\n')
 
         global_model.train()
         m = max(int(config.FRAC * config.NUM_USERS), 1)
         idxs_users = np.random.choice(range(config.NUM_USERS), m, replace=False)
 
+        c = 0
         for idx in idxs_users:
             local_model = LocalUpdate(dataset=train_dataset, idxs=user_groups[idx], logger=logger)
-            w, loss = local_model.update_weights(model=copy.deepcopy(global_model), global_round=epoch)
-            local_weights.append(copy.deepcopy(w))
-            local_losses.append(copy.deepcopy(loss))
 
-        # update global weights
-        global_weights = average_weights(local_weights)
+            # Calculate initial accuracy
+            acc, _ = local_model.inference(model=global_model)
+            c = c+1
+            print(f"User {idx} [{c}/{len(idxs_users)}] initial accuracy: {acc * 100:.2f}%")
 
-        # update global weights
-        global_model.load_state_dict(global_weights)
+            # If accuracy < 70%, update weights
+            if acc <= 0.7:
+                w, loss = local_model.update_weights(model=copy.deepcopy(global_model), global_round=epoch)
+                local_weights.append(copy.deepcopy(w))
+                local_losses.append(copy.deepcopy(loss))
+            else:
+                local_weights.append(global_model.state_dict())
+                local_losses.append(0)
 
-        loss_avg = sum(local_losses) / len(local_losses)
+            sample_counts.append(len(user_groups[idx]))  # Aggiungi il numero di campioni del client
+
+        # Update global weights if there are any selected local weights
+        if local_weights:
+            global_weights = average_weights(local_weights, sample_counts)
+            global_model.load_state_dict(global_weights)
+
+        loss_avg = sum(local_losses) / len(local_losses) if local_losses else 0
         train_loss.append(loss_avg)
 
         # Calculate avg training accuracy over all users at every epoch
         list_acc, list_loss = [], []
         global_model.eval()
         for c in range(config.NUM_USERS):
-            local_model = LocalUpdate(dataset=train_dataset,idxs=user_groups[idx], logger=logger)
+            local_model = LocalUpdate(dataset=train_dataset, idxs=user_groups[c], logger=logger)
             acc, loss = local_model.inference(model=global_model)
             list_acc.append(acc)
             list_loss.append(loss)

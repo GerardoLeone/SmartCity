@@ -57,8 +57,7 @@ class LocalUpdate(object):
         epoch_loss = []
 
         # Set optimizer for the local updates
-        optimizer = torch.optim.SGD(model.parameters(), lr=config.LR,
-                                    momentum=0.5)
+        optimizer = torch.optim.SGD(model.parameters(), lr=config.LR, momentum=0.5, weight_decay=1e-4)
 
         for iter in range(config.LOCAL_EP):
             batch_loss = []
