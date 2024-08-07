@@ -10,52 +10,53 @@ import config
 def get_dataset(train_ratio=0.8):
     # Trasformazioni da applicare alle immagini
     transform = transforms.Compose([
-        transforms.Resize((128, 128)),
-        transforms.RandomRotation(30),  # Aumenta la rotazione casuale fino a 30 gradi
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(),  # Aggiungi flip verticale casuale
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),  # Aggiungi variazioni di colore
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,)),
-        transforms.Lambda(lambda x: x + 0.1 * torch.randn_like(x))
+        transforms.Resize((128, 128)),  # Ridimensiona le immagini a 128x128 pixel
+        transforms.RandomRotation(30),  # Ruota casualmente le immagini fino a 30 gradi
+        transforms.RandomHorizontalFlip(),  # Applica flip orizzontale casuale
+        transforms.RandomVerticalFlip(),  # Applica flip verticale casuale
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
+        # Modifica casualmente le proprietà di colore
+        transforms.ToTensor(),  # Converte le immagini in tensori
+        transforms.Normalize((0.5,), (0.5,)),  # Normalizza i tensori
+        transforms.Lambda(lambda x: x + 0.1 * torch.randn_like(x))  # Aggiunge rumore gaussiano
     ])
 
-    # Carica il dataset
+    # Carica il dataset dalle immagini nella cartella 'garbage_classification'
     dataset = datasets.ImageFolder(root='garbage_classification/', transform=transform)
 
-    # Suddivisione in training e test set
-    train_size = int(train_ratio * len(dataset))
-    test_size = len(dataset) - train_size
-    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+    # Suddivisione del dataset in training set e test set
+    train_size = int(train_ratio * len(dataset))  # Calcola la dimensione del training set
+    test_size = len(dataset) - train_size  # Calcola la dimensione del test set
+    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])  # Divide il dataset
 
-    # Suddivisione dei dati per utente
+    # Suddivisione dei dati del training set per utente
     user_group = {}
-    indices = list(range(len(train_dataset)))
-    split = len(indices) // config.NUM_USERS
+    indices = list(range(len(train_dataset)))  # Crea una lista di indici
+    split = len(indices) // config.NUM_USERS  # Calcola la dimensione del blocco per utente
 
     for i in range(config.NUM_USERS):
-        start_idx = i * split
-        end_idx = (i + 1) * split if i != config.NUM_USERS - 1 else len(indices)
-        user_group[i] = indices[start_idx:end_idx]
+        start_idx = i * split  # Inizio del blocco
+        end_idx = (i + 1) * split if i != config.NUM_USERS - 1 else len(indices)  # Fine del blocco
+        user_group[i] = indices[start_idx:end_idx]  # Assegna gli indici all'utente
 
-    return train_dataset, test_dataset, user_group
+    return train_dataset, test_dataset, user_group  # Restituisce i dataset e il gruppo di utenti
 
 
 def average_weights(w, sample_counts):
     """
-    Averages the weights using sample counts as weights.
+    Media i pesi usando i conteggi dei campioni come pesi.
     Args:
-      w: A list of state_dicts from different models.
-      sample_counts: A list of integers representing the number of samples for each client.
+      w: Una lista di state_dict da diversi modelli.
+      sample_counts: Una lista di interi che rappresentano il numero di campioni per ciascun client.
     Returns:
-      The averaged state_dict.
+      Il state_dict mediato.
     """
-    total_samples = sum(sample_counts)
-    averaged_weights = copy.deepcopy(w[0])
+    total_samples = sum(sample_counts)  # Calcola il numero totale di campioni
+    averaged_weights = copy.deepcopy(w[0])  # Crea una copia dei pesi del primo modello
     for key in averaged_weights.keys():
         for i in range(len(w)):
             if i == 0:
-                averaged_weights[key] = w[i][key] * (sample_counts[i] / total_samples)
+                averaged_weights[key] = w[i][key] * (sample_counts[i] / total_samples)  # Inizializza la media pesata
             else:
-                averaged_weights[key] += w[i][key] * (sample_counts[i] / total_samples)
-    return averaged_weights
+                averaged_weights[key] += w[i][key] * (sample_counts[i] / total_samples)  # Aggiunge il contributo pesato
+    return averaged_weights  # Restituisce i pesi mediati
